@@ -1,0 +1,18 @@
+# PDF extraction
+pymupdf>=1.24
+
+# Embeddings (BGE-M3 dense + sparse) and reranker (bge-reranker-v2-m3), run directly with transformers
+torch
+transformers
+huggingface_hub
+
+# Vector store (embedded/local mode for the prototype; same client works against a Qdrant server later)
+qdrant-client>=1.12
+
+# LLM (API backend; the CLI backend needs no package)
+anthropic
+
+# Chat UI
+streamlit>=1.40
+
+python-dotenv
