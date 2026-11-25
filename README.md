@@ -14,7 +14,9 @@ question ──► hybrid search (dense + sparse, RRF) ──► bge-reranker-v2
 
 ```
 run.cmd                        # create venv + install/check dependencies, build the index if empty, start the chat UI
-run.cmd ingest [--force]       # build / update the RAG
+run.cmd ingest [--force]       # build / update the RAG (new or changed PDFs in training\ are appended)
+run.cmd ingest --file "C:\books\new book.pdf"   # add just one book (copied into training\)
+run.cmd ingest --list          # show indexed books
 run.cmd query "question" [--answer]
 run.cmd setup                  # only venv + dependencies
 ```

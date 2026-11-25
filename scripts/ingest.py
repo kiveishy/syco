@@ -1,6 +1,8 @@
 """Build / update the RAG from the PDFs in the training folder.
 
-    python scripts/ingest.py                      # ingest new or changed PDFs
+    python scripts/ingest.py                      # ingest new or changed PDFs in training/ (appends; others untouched)
+    python scripts/ingest.py --file book.pdf      # ingest / append only this PDF (copied into training/ if elsewhere)
+    python scripts/ingest.py --list               # show indexed books
     python scripts/ingest.py --force              # rebuild everything
     python scripts/ingest.py --extract-only       # only extract to data/extracted/*.md, for checking text quality
     python scripts/ingest.py --contextualize      # also write LLM context per section (slow on the CLI backend)
@@ -10,6 +12,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -38,19 +41,51 @@ def save_manifest(m: dict) -> None:
     config.MANIFEST_PATH.write_text(json.dumps(m, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _into_library(src: Path, library: Path, force: bool) -> Path:
+    """Keep training/ the single source of truth: a PDF given from elsewhere is copied into it,
+    so a later full run does not treat it as removed."""
+    if not src.is_file() or src.suffix.lower() != ".pdf":
+        sys.exit(f"Not a PDF file: {src}")
+    library.mkdir(parents=True, exist_ok=True)
+    dest = library / src.name
+    if src.resolve() == dest.resolve():
+        return dest
+    if dest.exists() and file_hash(dest) != file_hash(src) and not force:
+        sys.exit(f"{dest} already exists with different content. Rename the file or use --force to replace it.")
+    shutil.copy2(src, dest)
+    print(f"Copied {src} -> {dest}")
+    return dest
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--input", default=str(config.TRAINING_DIR))
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--extract-only", action="store_true")
     ap.add_argument("--contextualize", action="store_true")
+    ap.add_argument("--file", action="append", default=[], metavar="PDF",
+                    help="ingest only this PDF (repeatable); appended to the existing index")
+    ap.add_argument("--list", action="store_true", help="list indexed books and exit")
     args = ap.parse_args()
 
     config.ensure_dirs()
     manifest = load_manifest()
-    pdfs = sorted(Path(args.input).glob("*.pdf"))
+
+    if args.list:
+        if not manifest:
+            print("No books indexed yet.")
+        for name, e in sorted(manifest.items()):
+            print(f"{e['title']}\n    file={name} pages={e['pages']} sections={e['parents']} chunks={e['children']} "
+                  f"contextualized={e.get('contextualized', False)} ingested={e['ingested_at']}")
+        return
+
+    input_dir = Path(args.input)
+    if args.file:
+        pdfs = [_into_library(Path(f), input_dir, args.force) for f in args.file]
+    else:
+        pdfs = sorted(input_dir.glob("*.pdf"))
     if not pdfs:
-        print(f"No PDFs in {args.input}")
+        print(f"No PDFs in {input_dir}")
         return
 
     for pdf in pdfs:
@@ -109,8 +144,8 @@ def main() -> None:
         save_manifest(manifest)
         print(f"  done in {time.time() - t0:.0f}s")
 
-    # books removed from the training folder -> remove from index
-    present = {p.name for p in pdfs}
+    # books removed from the training folder -> remove from index (only on a full-folder run)
+    present = {p.name for p in pdfs} if not args.file else set(manifest)
     for name in [n for n in manifest if n not in present]:
         print(f"- {manifest[name]['title']}: removed from folder, deleting from index")
         store.delete_book(manifest[name]["book_id"])
@@ -118,8 +153,10 @@ def main() -> None:
             p.unlink(missing_ok=True)
         del manifest[name]
     save_manifest(manifest)
-    if not args.extract_only:
+    if not args.extract_only and store.client.cache_info().currsize:  # only if the DB was touched
         print(f"\nIndex contains {store.count()} chunks.")
+    elif not args.extract_only:
+        print("\nNothing to do: index is up to date.")
     store.close()
 
 

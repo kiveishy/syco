@@ -20,7 +20,15 @@ DENSE_DIM = 1024  # BGE-M3
 @lru_cache(maxsize=1)
 def client() -> QdrantClient:
     config.ensure_dirs()
-    return QdrantClient(path=str(config.QDRANT_DIR))
+    try:
+        return QdrantClient(path=str(config.QDRANT_DIR))
+    except RuntimeError as e:
+        if "already accessed" in str(e):
+            raise SystemExit(
+                "The index is in use by another process (probably the chat UI). "
+                "Stop it with Ctrl+C and run this command again."
+            ) from None
+        raise
 
 
 def close() -> None:

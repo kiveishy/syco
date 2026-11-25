@@ -5,6 +5,7 @@ REM
 REM    run.cmd                 start the chat UI (default)
 REM    run.cmd ui              start the chat UI
 REM    run.cmd ingest [args]   build/update the RAG from training\*.pdf  (e.g. run.cmd ingest --force)
+REM                            run.cmd ingest --file "C:\books\x.pdf"   add one book    run.cmd ingest --list
 REM    run.cmd query "text"    test retrieval from the command line (add --answer for a Claude answer)
 REM    run.cmd setup           only create the venv / install dependencies
 REM ---------------------------------------------------------------------------
@@ -77,7 +78,7 @@ if /i "%CMD%"=="ui" (
 )
 
 echo Unknown command: %CMD%
-echo Usage: run.cmd [ui ^| ingest [--force] ^| query "question" [--answer] ^| setup]
+echo Usage: run.cmd [ui ^| ingest [--force] [--file x.pdf] [--list] ^| query "question" [--answer] ^| setup]
 exit /b 1
 
 :run_ingest
